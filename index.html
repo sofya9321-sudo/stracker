@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Cigarette Tracker</title>
+    <!-- Web App Meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
+            background-color: #ffffff;
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        input[type="date"], input[type="time"] {
+            -webkit-appearance: none;
+            background: #f8fafc;
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Анимация переходов */
+        .fade-in {
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, memo } = React;
+
+        const Icons = {
+            Clock: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ),
+            History: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            ),
+            Stats: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            ),
+            Plus: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            ),
+            Edit: () => (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            ),
+            Trash: () => (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            ),
+            Reset: () => (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            ),
+            Calendar: () => (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            ),
+            Chevron: () => (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            )
+        };
+
+        const formatDuration = (ms) => {
+            if (!ms || ms <= 0 || isNaN(ms)) return "—";
+            const mins = Math.floor(ms / 60000);
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            if (h > 0) return `${h}ч ${m}м`;
+            return `${m}м`;
+        };
+
+        const TimerDisplay = memo(({ lastSmoke }) => {
+            const [elapsed, setElapsed] = useState(0);
+
+            useEffect(() => {
+                if (!lastSmoke) return;
+                const update = () => setElapsed(new Date() - new Date(lastSmoke));
+                update();
+                const timer = setInterval(update, 1000);
+                return () => clearInterval(timer);
+            }, [lastSmoke]);
+
+            const format = (ms) => {
+                if (!ms || ms < 0) return "00:00:00";
+                const sec = Math.floor(ms / 1000);
+                const hrs = Math.floor(sec / 3600);
+                const mins = Math.floor((sec % 3600) / 60);
+                const s = sec % 60;
+                return (
+                    <div className="flex gap-1.5 items-baseline justify-center">
+                        <span className="text-5xl font-black tracking-tighter text-slate-900">{String(hrs).padStart(2, '0')}</span>
+                        <span className="text-xl font-bold text-slate-200">:</span>
+                        <span className="text-5xl font-black tracking-tighter text-slate-900">{String(mins).padStart(2, '0')}</span>
+                        <span className="text-xl font-bold text-slate-200">:</span>
+                        <span className="text-4xl font-black tracking-tighter text-slate-400">{String(s).padStart(2, '0')}</span>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center py-2">
+                    <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-0.5">ЧИСТОЕ ВРЕМЯ</div>
+                    {lastSmoke ? format(elapsed) : <span className="text-3xl font-black text-slate-200 tracking-widest">00:00:00</span>}
+                </div>
+            );
+        });
+
+        const App = () => {
+            const [history, setHistory] = useState([]);
+            const [view, setView] = useState('main'); 
+            const [selectedPeriod, setSelectedPeriod] = useState('today');
+            const [activeModal, setActiveModal] = useState(null);
+            const [historyDate, setHistoryDate] = useState(new Date());
+            const [customRange, setCustomRange] = useState({ start: "", end: "" });
+
+            useEffect(() => {
+                const saved = localStorage.getItem('smoke_history_v8');
+                if (saved) {
+                    try {
+                        const restored = JSON.parse(saved).map(item => ({
+                            ...item,
+                            timestamp: new Date(item.timestamp)
+                        }));
+                        setHistory(restored);
+                    } catch (e) { console.error(e); }
+                }
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('smoke_history_v8', JSON.stringify(history));
+            }, [history]);
+
+            const toISODate = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+            const getStatsForData = (data) => {
+                const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp);
+                const intervals = [];
+                for (let i = 1; i < sorted.length; i++) {
+                    if (sorted[i].type !== 'first') {
+                        intervals.push(sorted[i].timestamp - sorted[i-1].timestamp);
+                    }
+                }
+                let median = 0;
+                if (intervals.length > 0) {
+                    const s = [...intervals].sort((a, b) => a - b);
+                    const m = Math.floor(s.length / 2);
+                    median = s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
+                }
+                const days = new Set(data.map(item => item.timestamp.toDateString())).size || 1;
+                return { total: data.length, median, avg: (data.length / days).toFixed(1) };
+            };
+
+            const getFilteredHistory = (period) => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                if (period === 'today') return history.filter(h => h.timestamp >= today);
+                if (period === 'yesterday') {
+                    const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+                    return history.filter(h => h.timestamp >= yest && h.timestamp < today);
+                }
+                if (period === 'week') {
+                    const week = new Date(today); week.setDate(week.getDate() - 7);
+                    return history.filter(h => h.timestamp >= week);
+                }
+                if (period === 'month') {
+                    const month = new Date(today); month.setMonth(month.getMonth() - 1);
+                    return history.filter(h => h.timestamp >= month);
+                }
+                if (period === 'period') {
+                    if (!customRange.start || !customRange.end) return [];
+                    const s = new Date(customRange.start); s.setHours(0,0,0,0);
+                    const e = new Date(customRange.end); e.setHours(23,59,59,999);
+                    return history.filter(h => h.timestamp >= s && h.timestamp <= e);
+                }
+                return history;
+            };
+
+            const currentStats = useMemo(() => getStatsForData(getFilteredHistory(selectedPeriod)), [history, selectedPeriod, customRange]);
+            const todayData = useMemo(() => getFilteredHistory('today'), [history]);
+            const todayStats = useMemo(() => getStatsForData(todayData), [todayData]);
+
+            const lastSmokeTime = useMemo(() => {
+                if (history.length === 0) return null;
+                const sorted = [...history].sort((a, b) => b.timestamp - a.timestamp);
+                return sorted[0].timestamp;
+            }, [history]);
+
+            const logDataForDate = useMemo(() => {
+                const target = historyDate.toDateString();
+                return history.filter(item => item.timestamp.toDateString() === target).sort((a, b) => b.timestamp - a.timestamp);
+            }, [history, historyDate]);
+
+            const handleSaveEntry = (id, timestamp, type) => {
+                if (id === null) {
+                    setHistory(prev => [...prev, { id: Date.now(), timestamp, type }]);
+                } else {
+                    setHistory(prev => prev.map(item => item.id === id ? { ...item, timestamp, type } : item));
+                }
+                setActiveModal(null);
+            };
+
+            return (
+                <div className="max-w-md mx-auto h-screen h-[100dvh] flex flex-col bg-white relative overflow-hidden">
+                    {/* Header */}
+                    <header className="px-6 h-14 flex justify-between items-center border-b border-slate-100 shrink-0">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white">
+                                <Icons.Stats />
+                            </div>
+                            <span className="font-black text-base uppercase italic tracking-widest">CigTrack</span>
+                        </div>
+                        <button onClick={() => window.confirm("Очистить все?") && setHistory([])} className="text-slate-300">
+                            <Icons.Reset />
+                        </button>
+                    </header>
+
+                    {/* Content */}
+                    <main className="flex-1 overflow-hidden px-5 flex flex-col">
+                        {view === 'main' && (
+                            <div className="flex-1 flex flex-col justify-center gap-4 py-2 fade-in">
+                                <TimerDisplay lastSmoke={lastSmokeTime} />
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
+                                        <div className="text-2xl font-black text-slate-800">{todayData.length}</div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ШТУК</div>
+                                    </div>
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center flex flex-col justify-center">
+                                        <div className="text-lg font-black text-slate-800 leading-tight">
+                                            {formatDuration(todayStats.median)}
+                                        </div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">МЕДИАНА</div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-3">
+                                    <button onClick={() => handleSaveEntry(null, new Date(), 'regular')} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] shadow-lg flex flex-col items-center justify-center active:scale-95 transition-all">
+                                        <Icons.Plus />
+                                        <span className="text-[10px] font-black uppercase tracking-widest mt-1">ПОКУРИЛ(А)</span>
+                                    </button>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button onClick={() => handleSaveEntry(null, new Date(), 'first')} className="bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-[10px] active:bg-slate-50 uppercase">УТРО</button>
+                                        <button onClick={() => handleSaveEntry(null, new Date(), 'last')} className="bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-[10px] active:bg-slate-50 uppercase">НОЧЬ</button>
+                                    </div>
+                                    
+                                    <button onClick={() => setActiveModal({ id: null, timestamp: new Date(), type: 'regular' })} className="w-full py-3 text-slate-400 text-[9px] font-bold uppercase border border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2">
+                                        <Icons.Calendar /> ЗАБЫЛА ВНЕСТИ?
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'history' && (
+                            <div className="flex-1 flex flex-col py-4 overflow-hidden fade-in">
+                                <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-xl border border-slate-100 mb-4 shrink-0">
+                                    <button onClick={() => { const d = new Date(historyDate); d.setDate(d.getDate()-1); setHistoryDate(d); }} className="p-1.5 bg-white rounded-md shadow-sm">
+                                        <Icons.Chevron />
+                                    </button>
+                                    <div className="text-center">
+                                        <span className="text-[8px] font-bold text-slate-400 block tracking-widest uppercase leading-none mb-1">ЖУРНАЛ</span>
+                                        <span className="text-xs font-black text-slate-800 uppercase italic">
+                                            {historyDate.toLocaleDateString([], { day: 'numeric', month: 'long' })}
+                                        </span>
+                                    </div>
+                                    <button onClick={() => { const d = new Date(historyDate); d.setDate(d.getDate()+1); setHistoryDate(d); }} className="p-1.5 bg-white rounded-md shadow-sm">
+                                        <div className="rotate-180"><Icons.Chevron /></div>
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-0.5 pb-2">
+                                    {logDataForDate.length === 0 ? <div className="py-10 text-center text-slate-300 font-bold uppercase text-[9px] tracking-widest">Пусто</div> : 
+                                    logDataForDate.map((item) => {
+                                        const sorted = [...logDataForDate].sort((a,b) => a.timestamp - b.timestamp);
+                                        const curIdx = sorted.findIndex(e => e.id === item.id);
+                                        const prev = curIdx > 0 ? sorted[curIdx - 1] : null;
+                                        const diff = (prev && item.type !== 'first') ? (item.timestamp - prev.timestamp) : null;
+                                        return (
+                                            <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xl font-black text-slate-800 tracking-tighter">{item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <span className="text-base">{item.type === 'first' ? '☀️' : item.type === 'last' ? '🌙' : ''}</span>
+                                                    </div>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{diff ? `Пауза: ${formatDuration(diff)}` : 'Старт дня'}</span>
+                                                </div>
+                                                <div className="flex gap-1.5">
+                                                    <button onClick={() => setActiveModal(item)} className="p-2 text-slate-300 active:text-slate-600"><Icons.Edit /></button>
+                                                    <button onClick={() => setHistory(h => h.filter(x => x.id !== item.id))} className="p-2 text-slate-200 active:text-slate-400"><Icons.Trash /></button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'stats' && (
+                            <div className="flex-1 flex flex-col py-4 overflow-hidden fade-in">
+                                <div className="flex bg-slate-100 p-0.5 rounded-lg mb-3 font-bold text-[8px] shrink-0 overflow-x-auto no-scrollbar">
+                                    {['today', 'yesterday', 'week', 'month', 'period'].map(p => (
+                                        <button key={p} onClick={() => setSelectedPeriod(p)} className={`flex-1 min-w-[50px] py-2.5 rounded-md uppercase transition-all ${selectedPeriod === p ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}>
+                                            {p === 'today' ? 'СЕГОДНЯ' : p === 'yesterday' ? 'ВЧЕРА' : p === 'week' ? 'НЕД' : p === 'month' ? 'МЕС' : 'ПЕРИОД'}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {selectedPeriod === 'period' && (
+                                    <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
+                                        <input type="date" value={customRange.start} onChange={e => setCustomRange({...customRange, start: e.target.value})} className="text-[10px] p-2 h-9" />
+                                        <input type="date" value={customRange.end} onChange={e => setCustomRange({...customRange, end: e.target.value})} className="text-[10px] p-2 h-9" />
+                                    </div>
+                                )}
+
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-0.5 pb-2">
+                                    <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-md">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <p className="text-[9px] font-bold uppercase tracking-widest opacity-50">Выкурено</p>
+                                            <Icons.Stats />
+                                        </div>
+                                        <p className="text-6xl font-black tracking-tighter">{currentStats.total}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Медиана</p>
+                                            <p className="text-lg font-black text-slate-800">{formatDuration(currentStats.median)}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Среднее</p>
+                                            <p className="text-lg font-black text-slate-800">{currentStats.avg}</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 text-[9px] text-slate-400 italic text-center leading-tight">
+                                        * День начинается с отметки «Утро». Сон не считается в медиане.
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Nav */}
+                    <nav className="h-16 bg-white border-t border-slate-100 flex justify-around items-center px-2 shrink-0">
+                        {[
+                            { id: 'main', icon: <Icons.Clock />, label: 'Трекер' },
+                            { id: 'history', icon: <Icons.History />, label: 'Журнал' },
+                            { id: 'stats', icon: <Icons.Stats />, label: 'Анализ' }
+                        ].map(item => (
+                            <button 
+                                key={item.id} 
+                                onClick={() => setView(item.id)} 
+                                className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${view === item.id ? 'text-slate-900' : 'text-slate-300'}`}
+                            >
+                                {item.icon}
+                                <span className="text-[8px] font-bold uppercase tracking-widest">{item.label}</span>
+                            </button>
+                        ))}
+                    </nav>
+
+                    {/* Modal */}
+                    {activeModal && (
+                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl fade-in">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">{activeModal.id ? 'ПРАВИТЬ' : 'ВРУЧНУЮ'}</h3>
+                                    <button onClick={() => setActiveModal(null)} className="p-1 text-slate-300"><Icons.Plus /></button>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ДАТА</p>
+                                            <input type="date" defaultValue={activeModal.timestamp.toISOString().split('T')[0]} onChange={e => activeModal.tempDate = e.target.value} className="w-full text-xs h-9" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ВРЕМЯ</p>
+                                            <input type="time" defaultValue={activeModal.timestamp.toTimeString().slice(0, 5)} onChange={e => activeModal.tempTime = e.target.value} className="w-full text-xs h-9" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[{id:'first', label:'☀️ УТРО'}, {id:'regular', label:'ОБЫЧ.'}, {id:'last', label:'🌙 НОЧЬ'}].map(tag => (
+                                            <button key={tag.id} onClick={() => activeModal.type = tag.id} className="py-3 rounded-lg text-[8px] font-bold uppercase border border-slate-100 focus:bg-slate-900 focus:text-white transition-all">
+                                                {tag.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => {
+                                        const d = activeModal.tempDate || activeModal.timestamp.toISOString().split('T')[0];
+                                        const t = activeModal.tempTime || activeModal.timestamp.toTimeString().slice(0, 5);
+                                        const [y, m, day] = d.split('-').map(Number);
+                                        const [hrs, mins] = t.split(':').map(Number);
+                                        handleSaveEntry(activeModal.id, new Date(y, m - 1, day, hrs, mins), activeModal.type || 'regular');
+                                    }} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs">СОХРАНИТЬ</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
