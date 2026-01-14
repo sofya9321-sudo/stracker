@@ -6,7 +6,7 @@
     <title>Cigarette Tracker</title>
     <!-- Web App Meta -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,17 +16,36 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
         
+        :root {
+            --sat: env(safe-area-inset-top);
+            --sab: env(safe-area-inset-bottom);
+        }
+
         body {
             font-family: 'Inter', -apple-system, sans-serif;
             -webkit-tap-highlight-color: transparent;
             overflow: hidden;
             background-color: #ffffff;
+            /* Используем dvh для точного соответствия экрану мобильного */
             height: 100vh;
             height: 100dvh;
         }
 
         .no-scrollbar::-webkit-scrollbar {
             display: none;
+        }
+
+        /* Адаптивные отступы для iPhone */
+        .safe-top {
+            padding-top: var(--sat);
+        }
+        .safe-bottom {
+            padding-bottom: var(--sab);
+        }
+        
+        /* Фикс высоты навигации с учетом безопасной зоны */
+        .nav-height {
+            height: calc(4rem + var(--sab));
         }
 
         input[type="date"], input[type="time"] {
@@ -37,7 +56,6 @@
             border: 1px solid #e2e8f0;
         }
 
-        /* Анимация переходов */
         .fade-in {
             animation: fadeIn 0.2s ease-in-out;
         }
@@ -154,8 +172,6 @@
                 localStorage.setItem('smoke_history_v8', JSON.stringify(history));
             }, [history]);
 
-            const toISODate = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-
             const getStatsForData = (data) => {
                 const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp);
                 const intervals = [];
@@ -226,17 +242,19 @@
 
             return (
                 <div className="max-w-md mx-auto h-screen h-[100dvh] flex flex-col bg-white relative overflow-hidden">
-                    {/* Header */}
-                    <header className="px-6 h-14 flex justify-between items-center border-b border-slate-100 shrink-0">
-                        <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white">
-                                <Icons.Stats />
+                    {/* Header with safe area top */}
+                    <header className="px-6 border-b border-slate-100 shrink-0 bg-white safe-top">
+                        <div className="h-14 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white">
+                                    <Icons.Stats />
+                                </div>
+                                <span className="font-black text-base uppercase italic tracking-widest">CigTrack</span>
                             </div>
-                            <span className="font-black text-base uppercase italic tracking-widest">CigTrack</span>
+                            <button onClick={() => window.confirm("Очистить все?") && setHistory([])} className="text-slate-300 p-2">
+                                <Icons.Reset />
+                            </button>
                         </div>
-                        <button onClick={() => window.confirm("Очистить все?") && setHistory([])} className="text-slate-300">
-                            <Icons.Reset />
-                        </button>
                     </header>
 
                     {/* Content */}
@@ -363,8 +381,8 @@
                         )}
                     </main>
 
-                    {/* Nav */}
-                    <nav className="h-16 bg-white border-t border-slate-100 flex justify-around items-center px-2 shrink-0">
+                    {/* Nav with safe area bottom */}
+                    <nav className="nav-height bg-white border-t border-slate-100 flex justify-around items-start pt-2 px-2 shrink-0 safe-bottom">
                         {[
                             { id: 'main', icon: <Icons.Clock />, label: 'Трекер' },
                             { id: 'history', icon: <Icons.History />, label: 'Журнал' },
@@ -373,7 +391,7 @@
                             <button 
                                 key={item.id} 
                                 onClick={() => setView(item.id)} 
-                                className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${view === item.id ? 'text-slate-900' : 'text-slate-300'}`}
+                                className={`flex flex-col items-center gap-1 transition-all flex-1 py-1 ${view === item.id ? 'text-slate-900' : 'text-slate-300'}`}
                             >
                                 {item.icon}
                                 <span className="text-[8px] font-bold uppercase tracking-widest">{item.label}</span>
@@ -384,10 +402,12 @@
                     {/* Modal */}
                     {activeModal && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl fade-in">
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl fade-in mb-[env(safe-area-inset-bottom)] sm:mb-0">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">{activeModal.id ? 'ПРАВИТЬ' : 'ВРУЧНУЮ'}</h3>
-                                    <button onClick={() => setActiveModal(null)} className="p-1 text-slate-300"><Icons.Plus /></button>
+                                    <button onClick={() => setActiveModal(null)} className="p-2 text-slate-300">
+                                        <div className="rotate-45"><Icons.Plus /></div>
+                                    </button>
                                 </div>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-3">
@@ -413,7 +433,7 @@
                                         const [y, m, day] = d.split('-').map(Number);
                                         const [hrs, mins] = t.split(':').map(Number);
                                         handleSaveEntry(activeModal.id, new Date(y, m - 1, day, hrs, mins), activeModal.type || 'regular');
-                                    }} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs">СОХРАНИТЬ</button>
+                                    }} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs active:scale-[0.98] transition-all">СОХРАНИТЬ</button>
                                 </div>
                             </div>
                         </div>
