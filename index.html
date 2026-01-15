@@ -32,7 +32,6 @@
         body {
             font-family: 'Inter', -apple-system, sans-serif;
             -webkit-tap-highlight-color: transparent;
-            /* Используем dvh для корректной работы в браузерах с динамическими барами */
             height: 100dvh;
         }
 
@@ -44,27 +43,16 @@
             display: none;
         }
 
-        /* Адаптивные отступы для iPhone */
         .safe-top {
             padding-top: var(--sat);
         }
         
-        /* Гарантированный отступ снизу для навигации */
         .safe-bottom-padding {
             padding-bottom: calc(0.5rem + var(--sab));
         }
         
-        /* Увеличенная высота навигации для удобства нажатия */
         .nav-height {
             min-height: calc(4.5rem + var(--sab));
-        }
-
-        input[type="date"], input[type="time"] {
-            -webkit-appearance: none;
-            background: #f8fafc;
-            border-radius: 0.75rem;
-            padding: 0.5rem;
-            border: 1px solid #e2e8f0;
         }
 
         .fade-in {
@@ -83,15 +71,22 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, memo } = React;
 
+        const getLocalDateString = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
         const Icons = {
             Clock: () => (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             ),
             History: () => (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
             ),
             Stats: () => (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             ),
             Plus: () => (
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -122,49 +117,95 @@
             return `${m}м`;
         };
 
-        const TimerDisplay = memo(({ lastSmoke }) => {
-            const [elapsed, setElapsed] = useState(0);
+        const getSmoothPath = (points) => {
+            if (points.length < 2) return "";
+            let path = `M ${points[0].x},${points[0].y}`;
+            for (let i = 0; i < points.length - 1; i++) {
+                const p0 = points[i];
+                const p1 = points[i + 1];
+                const cp1x = p0.x + (p1.x - p0.x) / 2;
+                path += ` C ${cp1x},${p0.y} ${cp1x},${p1.y} ${p1.x},${p1.y}`;
+            }
+            return path;
+        };
+
+        const SmoothLineChart = ({ data, title, color = "#0f172a" }) => {
+            const containerRef = React.useRef(null);
+            const [size, setSize] = useState({ width: 300, height: 100 });
 
             useEffect(() => {
-                if (!lastSmoke) return;
-                const update = () => setElapsed(new Date() - new Date(lastSmoke));
-                update();
-                const timer = setInterval(update, 1000);
-                return () => clearInterval(timer);
-            }, [lastSmoke]);
+                const updateSize = () => {
+                    if (containerRef.current) {
+                        setSize({
+                            width: containerRef.current.clientWidth,
+                            height: containerRef.current.clientHeight
+                        });
+                    }
+                };
+                updateSize();
+                const observer = new ResizeObserver(updateSize);
+                if (containerRef.current) observer.observe(containerRef.current);
+                return () => observer.disconnect();
+            }, []);
 
-            const format = (ms) => {
-                if (!ms || ms < 0) return "00:00:00";
-                const sec = Math.floor(ms / 1000);
-                const hrs = Math.floor(sec / 3600);
-                const mins = Math.floor((sec % 3600) / 60);
-                const s = sec % 60;
-                return (
-                    <div className="flex gap-1.5 items-baseline justify-center">
-                        <span className="text-5xl font-black tracking-tighter text-slate-900">{String(hrs).padStart(2, '0')}</span>
-                        <span className="text-xl font-bold text-slate-200">:</span>
-                        <span className="text-5xl font-black tracking-tighter text-slate-900">{String(mins).padStart(2, '0')}</span>
-                        <span className="text-xl font-bold text-slate-200">:</span>
-                        <span className="text-4xl font-black tracking-tighter text-slate-400">{String(s).padStart(2, '0')}</span>
-                    </div>
-                );
-            };
-
-            return (
-                <div className="flex flex-col items-center justify-center py-2">
-                    <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-0.5">ЧИСТОЕ ВРЕМЯ</div>
-                    {lastSmoke ? format(elapsed) : <span className="text-3xl font-black text-slate-200 tracking-widest">00:00:00</span>}
+            if (!data || data.length < 2) return (
+                <div className="flex-1 bg-slate-50/50 rounded-xl flex items-center justify-center border border-dashed border-slate-200">
+                    <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Нет данных</span>
                 </div>
             );
-        });
+
+            // Фикс расчета координат: зазоры по X и Y
+            const paddingX = 25; 
+            const paddingY = 20; // Увеличил вертикальный отступ для надежности
+            const maxVal = Math.max(...data.map(d => d.value), 1);
+            
+            const drawableWidth = size.width - paddingX * 2;
+            const drawableHeight = size.height - paddingY * 2;
+
+            const points = data.map((d, i) => ({
+                x: (i / (data.length - 1)) * drawableWidth + paddingX,
+                // Инвертируем Y: (height - padding) - нормализованное значение
+                y: (size.height - paddingY) - ((d.value / maxVal) * drawableHeight)
+            }));
+
+            const path = getSmoothPath(points);
+
+            return (
+                <div ref={containerRef} className="flex-1 flex flex-col min-h-0 bg-white border border-slate-100 p-2 rounded-xl shadow-sm relative overflow-hidden">
+                    <p className="text-[8px] font-black uppercase tracking-[0.15em] text-slate-400 mb-1 absolute top-2 left-2 z-10">{title}</p>
+                    <svg width="100%" height="100%" className="block overflow-visible">
+                        <path 
+                            d={path} 
+                            fill="none" 
+                            stroke={color} 
+                            strokeWidth="3" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round" 
+                        />
+                        {points.map((p, i) => (
+                            <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="white" stroke={color} strokeWidth="2" />
+                        ))}
+                    </svg>
+                </div>
+            );
+        };
 
         const App = () => {
             const [history, setHistory] = useState([]);
             const [view, setView] = useState('main'); 
             const [selectedPeriod, setSelectedPeriod] = useState('today');
             const [activeModal, setActiveModal] = useState(null);
-            const [historyDate, setHistoryDate] = useState(new Date());
+            const [historyPageIndex, setHistoryPageIndex] = useState(0);
             const [customRange, setCustomRange] = useState({ start: "", end: "" });
+
+            const handleSaveEntry = (id, timestamp, type) => {
+                if (id === null) {
+                    setHistory(prev => [...prev, { id: Date.now(), timestamp, type }]);
+                } else {
+                    setHistory(prev => prev.map(item => item.id === id ? { ...item, timestamp, type } : item));
+                }
+                setActiveModal(null);
+            };
 
             useEffect(() => {
                 const saved = localStorage.getItem('smoke_history_v8');
@@ -183,33 +224,25 @@
                 localStorage.setItem('smoke_history_v8', JSON.stringify(history));
             }, [history]);
 
-            const getStatsForData = (data) => {
-                const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp);
-                const intervals = [];
-                for (let i = 1; i < sorted.length; i++) {
-                    if (sorted[i].type !== 'first') {
-                        intervals.push(sorted[i].timestamp - sorted[i-1].timestamp);
+            const sessions = useMemo(() => {
+                const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
+                const result = [];
+                let currentSession = [];
+                sorted.forEach((item) => {
+                    if (item.type === 'first' && currentSession.length > 0) {
+                        result.push(currentSession);
+                        currentSession = [];
                     }
-                }
-                let median = 0;
-                if (intervals.length > 0) {
-                    const s = [...intervals].sort((a, b) => a - b);
-                    const m = Math.floor(s.length / 2);
-                    median = s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
-                }
-                const days = new Set(data.map(item => item.timestamp.toDateString())).size || 1;
-                return { total: data.length, median, avg: (data.length / days).toFixed(1) };
-            };
+                    currentSession.push(item);
+                });
+                if (currentSession.length > 0) result.push(currentSession);
+                return result.reverse();
+            }, [history]);
 
-            const getFilteredHistory = (period) => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                
-                if (period === 'today') return history.filter(h => h.timestamp >= today);
-                if (period === 'yesterday') {
-                    const yest = new Date(today); yest.setDate(yest.getDate() - 1);
-                    return history.filter(h => h.timestamp >= yest && h.timestamp < today);
-                }
+            const getFilteredData = (period) => {
+                if (period === 'today') return sessions[0] || [];
+                if (period === 'yesterday') return sessions[1] || [];
+                const today = new Date(); today.setHours(0, 0, 0, 0);
                 if (period === 'week') {
                     const week = new Date(today); week.setDate(week.getDate() - 7);
                     return history.filter(h => h.timestamp >= week);
@@ -227,78 +260,106 @@
                 return history;
             };
 
-            const currentStats = useMemo(() => getStatsForData(getFilteredHistory(selectedPeriod)), [history, selectedPeriod, customRange]);
-            const todayData = useMemo(() => getFilteredHistory('today'), [history]);
-            const todayStats = useMemo(() => getStatsForData(todayData), [todayData]);
-
-            const lastSmokeTime = useMemo(() => {
-                if (history.length === 0) return null;
-                const sorted = [...history].sort((a, b) => b.timestamp - a.timestamp);
-                return sorted[0].timestamp;
-            }, [history]);
-
-            const logDataForDate = useMemo(() => {
-                const target = historyDate.toDateString();
-                return history.filter(item => item.timestamp.toDateString() === target).sort((a, b) => b.timestamp - a.timestamp);
-            }, [history, historyDate]);
-
-            const handleSaveEntry = (id, timestamp, type) => {
-                if (id === null) {
-                    setHistory(prev => [...prev, { id: Date.now(), timestamp, type }]);
-                } else {
-                    setHistory(prev => prev.map(item => item.id === id ? { ...item, timestamp, type } : item));
+            const stats = useMemo(() => {
+                const data = getFilteredData(selectedPeriod);
+                const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp);
+                const intervals = [];
+                for (let i = 1; i < sorted.length; i++) {
+                    if (sorted[i].type !== 'first') {
+                        intervals.push(sorted[i].timestamp - sorted[i-1].timestamp);
+                    }
                 }
-                setActiveModal(null);
-            };
+
+                let medianMs = 0;
+                if (intervals.length > 0) {
+                    const s = [...intervals].sort((a, b) => a - b);
+                    const m = Math.floor(s.length / 2);
+                    medianMs = s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
+                }
+
+                let qtyChartData = [];
+                if (['week', 'month', 'period'].includes(selectedPeriod)) {
+                    const dayMap = {};
+                    sorted.forEach(item => {
+                        const d = item.timestamp.toDateString();
+                        dayMap[d] = (dayMap[d] || 0) + 1;
+                    });
+                    qtyChartData = Object.entries(dayMap).map(([label, value]) => ({ label, value }));
+                }
+
+                let intervalChartData = [];
+                if (selectedPeriod === 'today' || selectedPeriod === 'yesterday') {
+                    intervalChartData = intervals.map((ms, i) => ({ label: i, value: Math.round(ms / 60000) }));
+                } else {
+                    const dayIntervalsMap = {};
+                    for (let i = 1; i < sorted.length; i++) {
+                        if (sorted[i].type !== 'first') {
+                            const d = sorted[i].timestamp.toDateString();
+                            if (!dayIntervalsMap[d]) dayIntervalsMap[d] = [];
+                            dayIntervalsMap[d].push(sorted[i].timestamp - sorted[i-1].timestamp);
+                        }
+                    }
+                    intervalChartData = Object.entries(dayIntervalsMap).map(([label, vals]) => {
+                        const s = [...vals].sort((a, b) => a - b);
+                        const m = Math.floor(s.length / 2);
+                        const med = s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
+                        return { label, value: Math.round(med / 60000) };
+                    });
+                }
+
+                const avgPerSession = (['week', 'month', 'period'].includes(selectedPeriod))
+                    ? (data.length / (sessions.filter(s => s.some(item => data.includes(item))).length || 1)).toFixed(1)
+                    : data.length;
+
+                return { total: data.length, median: formatDuration(medianMs), avg: avgPerSession, qtyChart: qtyChartData, intervalChart: intervalChartData };
+            }, [history, selectedPeriod, sessions, customRange]);
 
             return (
                 <div className="max-w-md mx-auto h-full flex flex-col bg-white relative overflow-hidden">
-                    {/* Header with safe area top */}
-                    <header className="px-6 border-b border-slate-100 shrink-0 bg-white safe-top">
-                        <div className="h-14 flex justify-between items-center">
+                    <header className="px-5 border-b border-slate-100 shrink-0 bg-white safe-top">
+                        <div className="h-12 flex justify-between items-center">
                             <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white">
+                                <div className="w-6 h-6 bg-slate-900 rounded-lg flex items-center justify-center text-white">
                                     <Icons.Stats />
                                 </div>
-                                <span className="font-black text-base uppercase italic tracking-widest">CigTrack</span>
+                                <span className="font-black text-sm uppercase italic tracking-widest">CigTrack</span>
                             </div>
-                            <button onClick={() => window.confirm("Очистить все?") && setHistory([])} className="text-slate-300 p-2">
+                            <button onClick={() => window.confirm("Сбросить данные?") && setHistory([])} className="text-slate-300 p-2">
                                 <Icons.Reset />
                             </button>
                         </div>
                     </header>
 
-                    {/* Content */}
-                    <main className="flex-1 overflow-hidden px-5 flex flex-col min-h-0">
+                    <main className="flex-1 overflow-hidden px-4 flex flex-col min-h-0 bg-slate-50/30">
                         {view === 'main' && (
                             <div className="flex-1 flex flex-col justify-center gap-4 py-2 fade-in">
-                                <TimerDisplay lastSmoke={lastSmokeTime} />
+                                <div className="text-center py-4">
+                                    <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">ЧИСТОЕ ВРЕМЯ</div>
+                                    <div className="text-5xl font-black tracking-tighter text-slate-900">
+                                        {formatDuration(new Date() - (sessions[0]?.[sessions[0].length-1]?.timestamp || new Date()))}
+                                    </div>
+                                </div>
                                 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
-                                        <div className="text-2xl font-black text-slate-800">{todayData.length}</div>
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ШТУК</div>
+                                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                        <div className="text-2xl font-black text-slate-800">{sessions[0]?.length || 0}</div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ЗА СЕССИЮ</div>
                                     </div>
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center flex flex-col justify-center">
+                                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center flex flex-col justify-center">
                                         <div className="text-lg font-black text-slate-800 leading-tight">
-                                            {formatDuration(todayStats.median)}
+                                            {stats.median}
                                         </div>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">МЕДИАНА</div>
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col gap-3">
-                                    <button onClick={() => handleSaveEntry(null, new Date(), 'regular')} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] shadow-lg flex flex-col items-center justify-center active:scale-95 transition-all">
+                                <div className="flex flex-col gap-3 mt-2">
+                                    <button onClick={() => handleSaveEntry(null, new Date(), 'regular')} className="w-full bg-slate-900 text-white py-8 rounded-[2rem] shadow-xl flex flex-col items-center justify-center active:scale-95 transition-all">
                                         <Icons.Plus />
-                                        <span className="text-[10px] font-black uppercase tracking-widest mt-1">ПОКУРИЛ(А)</span>
+                                        <span className="text-[12px] font-black uppercase tracking-widest mt-2">ПОКУРИЛ(А)</span>
                                     </button>
-                                    
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => handleSaveEntry(null, new Date(), 'first')} className="bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-[10px] active:bg-slate-50 uppercase">УТРО</button>
-                                        <button onClick={() => handleSaveEntry(null, new Date(), 'last')} className="bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-[10px] active:bg-slate-50 uppercase">НОЧЬ</button>
-                                    </div>
-                                    
-                                    <button onClick={() => setActiveModal({ id: null, timestamp: new Date(), type: 'regular' })} className="w-full py-3 text-slate-400 text-[9px] font-bold uppercase border border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2">
+                                    <button onClick={() => handleSaveEntry(null, new Date(), 'first')} className="bg-white border-2 border-slate-900 text-slate-900 py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-[11px] active:bg-slate-50 uppercase shadow-sm">НОВОЕ УТРО</button>
+                                    <button onClick={() => setActiveModal({ id: null, timestamp: new Date(), type: 'regular' })} className="w-full py-3 mt-1 text-slate-400 text-[9px] font-bold uppercase border border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2">
                                         <Icons.Calendar /> ЗАБЫЛА ВНЕСТИ?
                                     </button>
                                 </div>
@@ -307,40 +368,32 @@
 
                         {view === 'history' && (
                             <div className="flex-1 flex flex-col py-4 overflow-hidden fade-in">
-                                <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-xl border border-slate-100 mb-4 shrink-0">
-                                    <button onClick={() => { const d = new Date(historyDate); d.setDate(d.getDate()-1); setHistoryDate(d); }} className="p-1.5 bg-white rounded-md shadow-sm">
-                                        <Icons.Chevron />
-                                    </button>
+                                <div className="flex items-center justify-between bg-white p-1 rounded-xl border border-slate-100 mb-4 shrink-0 shadow-sm">
+                                    <button onClick={() => setHistoryPageIndex(p => Math.min(sessions.length - 1, p + 1))} className="p-2 bg-slate-50 rounded-lg disabled:opacity-30" disabled={historyPageIndex >= sessions.length - 1}><Icons.Chevron /></button>
                                     <div className="text-center">
-                                        <span className="text-[8px] font-bold text-slate-400 block tracking-widest uppercase leading-none mb-1">ЖУРНАЛ</span>
-                                        <span className="text-xs font-black text-slate-800 uppercase italic">
-                                            {historyDate.toLocaleDateString([], { day: 'numeric', month: 'long' })}
-                                        </span>
+                                        <span className="text-[8px] font-bold text-slate-400 block tracking-widest uppercase mb-0.5">{historyPageIndex === 0 ? 'ТЕКУЩАЯ' : `СЕССИЯ #${sessions.length - historyPageIndex}`}</span>
+                                        <span className="text-xs font-black text-slate-800 uppercase italic">{sessions[historyPageIndex]?.[0]?.timestamp.toLocaleDateString([], { day: 'numeric', month: 'short' }) || '...'}</span>
                                     </div>
-                                    <button onClick={() => { const d = new Date(historyDate); d.setDate(d.getDate()+1); setHistoryDate(d); }} className="p-1.5 bg-white rounded-md shadow-sm">
-                                        <div className="rotate-180"><Icons.Chevron /></div>
-                                    </button>
+                                    <button onClick={() => setHistoryPageIndex(p => Math.max(0, p - 1))} className="p-2 bg-slate-50 rounded-lg disabled:opacity-30" disabled={historyPageIndex === 0}><div className="rotate-180"><Icons.Chevron /></div></button>
                                 </div>
-
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-0.5 pb-2">
-                                    {logDataForDate.length === 0 ? <div className="py-10 text-center text-slate-300 font-bold uppercase text-[9px] tracking-widest">Пусто</div> : 
-                                    logDataForDate.map((item) => {
-                                        const sorted = [...logDataForDate].sort((a,b) => a.timestamp - b.timestamp);
-                                        const curIdx = sorted.findIndex(e => e.id === item.id);
-                                        const prev = curIdx > 0 ? sorted[curIdx - 1] : null;
-                                        const diff = (prev && item.type !== 'first') ? (item.timestamp - prev.timestamp) : null;
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pb-4">
+                                    {sessions[historyPageIndex] && [...sessions[historyPageIndex]].reverse().map((item) => {
+                                        const sortedSess = [...sessions[historyPageIndex]].sort((a,b) => a.timestamp - b.timestamp);
+                                        const itemIdx = sortedSess.findIndex(e => e.id === item.id);
+                                        const prev = itemIdx > 0 ? sortedSess[itemIdx - 1] : null;
+                                        const diff = prev ? (item.timestamp - prev.timestamp) : null;
                                         return (
-                                            <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-2">
+                                            <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-3">
                                                         <span className="text-xl font-black text-slate-800 tracking-tighter">{item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                        <span className="text-base">{item.type === 'first' ? '☀️' : item.type === 'last' ? '🌙' : ''}</span>
+                                                        {item.type === 'first' && <span className="text-[8px] font-black bg-slate-900 text-white px-1.5 py-0.5 rounded uppercase">Старт</span>}
                                                     </div>
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{diff ? `Пауза: ${formatDuration(diff)}` : 'Старт дня'}</span>
+                                                    {item.type !== 'first' && diff && <div className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded-md"><span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">Пауза: {formatDuration(diff)}</span></div>}
                                                 </div>
-                                                <div className="flex gap-1.5">
-                                                    <button onClick={() => setActiveModal(item)} className="p-2 text-slate-300 active:text-slate-600"><Icons.Edit /></button>
-                                                    <button onClick={() => setHistory(h => h.filter(x => x.id !== item.id))} className="p-2 text-slate-200 active:text-slate-400"><Icons.Trash /></button>
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => setActiveModal(item)} className="p-2 text-slate-300"><Icons.Edit /></button>
+                                                    <button onClick={() => setHistory(h => h.filter(x => x.id !== item.id))} className="p-2 text-slate-200"><Icons.Trash /></button>
                                                 </div>
                                             </div>
                                         );
@@ -350,101 +403,68 @@
                         )}
 
                         {view === 'stats' && (
-                            <div className="flex-1 flex flex-col py-4 overflow-hidden fade-in">
-                                <div className="flex bg-slate-100 p-0.5 rounded-lg mb-3 font-bold text-[8px] shrink-0 overflow-x-auto no-scrollbar">
+                            <div className="flex-1 flex flex-col py-3 overflow-hidden fade-in gap-3">
+                                <div className="flex bg-slate-200/50 p-1 rounded-xl font-bold text-[8px] shrink-0">
                                     {['today', 'yesterday', 'week', 'month', 'period'].map(p => (
-                                        <button key={p} onClick={() => setSelectedPeriod(p)} className={`flex-1 min-w-[50px] py-2.5 rounded-md uppercase transition-all ${selectedPeriod === p ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}>
-                                            {p === 'today' ? 'СЕГОДНЯ' : p === 'yesterday' ? 'ВЧЕРА' : p === 'week' ? 'НЕД' : p === 'month' ? 'МЕС' : 'ПЕРИОД'}
+                                        <button key={p} onClick={() => setSelectedPeriod(p)} className={`flex-1 py-2.5 rounded-lg uppercase transition-all ${selectedPeriod === p ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
+                                            {p === 'today' ? 'СЕГОДНЯ' : p === 'yesterday' ? 'ВЧЕРА' : p === 'week' ? 'НЕД' : p === 'month' ? 'МЕС' : 'ПЕР.'}
                                         </button>
                                     ))}
                                 </div>
-
                                 {selectedPeriod === 'period' && (
-                                    <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
-                                        <input type="date" value={customRange.start} onChange={e => setCustomRange({...customRange, start: e.target.value})} className="text-[10px] p-2 h-9" />
-                                        <input type="date" value={customRange.end} onChange={e => setCustomRange({...customRange, end: e.target.value})} className="text-[10px] p-2 h-9" />
+                                    <div className="grid grid-cols-2 gap-2 shrink-0">
+                                        <input type="date" value={customRange.start} onChange={e => setCustomRange({...customRange, start: e.target.value})} className="text-[9px] p-2 rounded-lg border border-slate-200" />
+                                        <input type="date" value={customRange.end} onChange={e => setCustomRange({...customRange, end: e.target.value})} className="text-[9px] p-2 rounded-lg border border-slate-200" />
                                     </div>
                                 )}
-
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-0.5 pb-2">
-                                    <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-md">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <p className="text-[9px] font-bold uppercase tracking-widest opacity-50">Выкурено</p>
-                                            <Icons.Stats />
-                                        </div>
-                                        <p className="text-6xl font-black tracking-tighter">{currentStats.total}</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Медиана</p>
-                                            <p className="text-lg font-black text-slate-800">{formatDuration(currentStats.median)}</p>
-                                        </div>
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Среднее</p>
-                                            <p className="text-lg font-black text-slate-800">{currentStats.avg}</p>
-                                        </div>
-                                    </div>
-                                    <div className="p-3 text-[9px] text-slate-400 italic text-center leading-tight">
-                                        * День начинается с отметки «Утро». Сон не считается в медиане.
-                                    </div>
+                                <div className="bg-slate-900 p-4 rounded-2xl text-white shadow-lg shrink-0 flex items-center justify-between">
+                                    <div><p className="text-[8px] font-black uppercase tracking-widest opacity-50 mb-1">ВСЕГО СИГАРЕТ</p><p className="text-5xl font-black tracking-tighter leading-none">{stats.total}</p></div>
+                                    <div className="text-right"><p className="text-[8px] font-black uppercase tracking-widest opacity-50 mb-1">В СРЕДНЕМ</p><p className="text-2xl font-black leading-none">{stats.avg}</p></div>
+                                </div>
+                                <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm shrink-0 flex justify-between items-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">МЕДИАНА ПАУЗЫ</p><p className="text-sm font-black text-slate-800">{stats.median}</p></div>
+                                <div className="flex-1 flex flex-col gap-3 min-h-0">
+                                    {stats.qtyChart.length > 1 && <SmoothLineChart data={stats.qtyChart} title="ТРЕНД (КОЛ-ВО)" color="#0f172a" />}
+                                    <SmoothLineChart data={stats.intervalChart} title={selectedPeriod === 'today' || selectedPeriod === 'yesterday' ? "ПАУЗЫ (МИН.)" : "МЕДИАНА ПАУЗ (МИН.)"} color="#64748b" />
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* Nav with safe area bottom and higher Z-index */}
                     <nav className="nav-height bg-white border-t border-slate-100 flex justify-around items-start pt-2 px-2 shrink-0 safe-bottom-padding z-50">
                         {[
-                            { id: 'main', icon: <Icons.Clock />, label: 'Трекер' },
-                            { id: 'history', icon: <Icons.History />, label: 'Журнал' },
-                            { id: 'stats', icon: <Icons.Stats />, label: 'Анализ' }
-                        ].map(item => (
-                            <button 
-                                key={item.id} 
-                                onClick={() => setView(item.id)} 
-                                className={`flex flex-col items-center gap-1 transition-all flex-1 py-1 ${view === item.id ? 'text-slate-900' : 'text-slate-300'}`}
-                            >
-                                {item.icon}
-                                <span className="text-[8px] font-bold uppercase tracking-widest">{item.label}</span>
-                            </button>
-                        ))}
+                            { id: 'main', icon: Icons.Clock, label: 'Трекер' },
+                            { id: 'history', icon: Icons.History, label: 'Журнал' },
+                            { id: 'stats', icon: Icons.Stats, label: 'Анализ' }
+                        ].map(item => {
+                            const IconComponent = item.icon;
+                            return (
+                                <button key={item.id} onClick={() => setView(item.id)} className={`flex flex-col items-center gap-1 transition-all flex-1 py-1 ${view === item.id ? 'text-slate-900' : 'text-slate-300'}`}>
+                                    <IconComponent />
+                                    <span className="text-[8px] font-bold uppercase tracking-widest">{item.label}</span>
+                                </button>
+                            );
+                        })}
                     </nav>
 
-                    {/* Modal */}
                     {activeModal && (
-                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl fade-in mb-[env(safe-area-inset-bottom)] sm:mb-0">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">{activeModal.id ? 'ПРАВИТЬ' : 'ВРУЧНУЮ'}</h3>
-                                    <button onClick={() => setActiveModal(null)} className="p-2 text-slate-300">
-                                        <div className="rotate-45"><Icons.Plus /></div>
-                                    </button>
-                                </div>
+                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-end justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl fade-in mb-[env(safe-area-inset-bottom)]">
+                                <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">ИЗМЕНИТЬ</h3><button onClick={() => setActiveModal(null)} className="p-2 text-slate-300 rotate-45"><Icons.Plus /></button></div>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1">
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ДАТА</p>
-                                            <input type="date" defaultValue={activeModal.timestamp.toISOString().split('T')[0]} onChange={e => activeModal.tempDate = e.target.value} className="w-full text-xs h-9" />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ВРЕМЯ</p>
-                                            <input type="time" defaultValue={activeModal.timestamp.toTimeString().slice(0, 5)} onChange={e => activeModal.tempTime = e.target.value} className="w-full text-xs h-9" />
-                                        </div>
+                                        <input type="date" defaultValue={getLocalDateString(activeModal.timestamp)} onChange={e => activeModal.tempDate = e.target.value} className="w-full text-xs p-3 bg-slate-50 rounded-xl" />
+                                        <input type="time" defaultValue={activeModal.timestamp.toTimeString().slice(0, 5)} onChange={e => activeModal.tempTime = e.target.value} className="w-full text-xs p-3 bg-slate-50 rounded-xl" />
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[{id:'first', label:'☀️ УТРО'}, {id:'regular', label:'ОБЫЧ.'}, {id:'last', label:'🌙 НОЧЬ'}].map(tag => (
-                                            <button key={tag.id} onClick={() => activeModal.type = tag.id} className="py-3 rounded-lg text-[8px] font-bold uppercase border border-slate-100 focus:bg-slate-900 focus:text-white transition-all">
-                                                {tag.label}
-                                            </button>
-                                        ))}
+                                    <div className="flex gap-2">
+                                        {['first', 'regular'].map(t => <button key={t} onClick={() => activeModal.type = t} className="flex-1 py-3 rounded-xl text-[10px] font-bold uppercase border border-slate-100 focus:bg-slate-900 focus:text-white transition-all">{t === 'first' ? 'Утро' : 'Обычная'}</button>)}
                                     </div>
                                     <button onClick={() => {
-                                        const d = activeModal.tempDate || activeModal.timestamp.toISOString().split('T')[0];
+                                        const d = activeModal.tempDate || getLocalDateString(activeModal.timestamp);
                                         const t = activeModal.tempTime || activeModal.timestamp.toTimeString().slice(0, 5);
                                         const [y, m, day] = d.split('-').map(Number);
                                         const [hrs, mins] = t.split(':').map(Number);
                                         handleSaveEntry(activeModal.id, new Date(y, m - 1, day, hrs, mins), activeModal.type || 'regular');
-                                    }} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs active:scale-[0.98] transition-all">СОХРАНИТЬ</button>
+                                    }} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs">СОХРАНИТЬ</button>
                                 </div>
                             </div>
                         </div>
